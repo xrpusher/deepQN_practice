@@ -17,7 +17,18 @@ Riverraid is a classic Atari arcade game where the player controls a plane flyin
 
 You can read more about the Riverraid environment and its variations on the official Gymnasium documentation: [Riverraid Environment Documentation](https://gymnasium.farama.org/environments/atari/riverraid/)
 
-# Statistics
+###  Result of new version
+https://drive.google.com/file/d/1ms7P5ri3L2ZgAh94xhr6xT_A4bSO8kmK/view?usp=sharing
+
+        self.epsilon = 1.0  # Initial exploration
+        self.epsilon_min = 0.1
+        self.epsilon_decay = 0.995
+        self.gamma = 0.99  # Discount factor
+        self.learning_rate = 0.00025
+        self.batch_size = 32
+        self.memory_capacity = 20000
+        self.target_update = 1000
+###  Statistics for version 1     
 
 1) RTX 2060 super
 2) 1.5h
