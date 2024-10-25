@@ -48,6 +48,7 @@ You can run the simulation and see how the agents perform in their environment b
 
 ```bash
 python marl_tanks_simulation.py
+```
 
 ## Simulation Parameters:
 
@@ -106,9 +107,9 @@ During the simulation, the agents will move, shoot, and try to eliminate each ot
 - **Black squares**: Bullets fired by the agents
 - **Scoreboard**: At the bottom of the screen, showing the cumulative reward for each agent, with "dead" status when an agent is eliminated.
 
-Here’s a screenshot from the simulation:
+Here’s a video from the simulation:
 
-![Tank Simulation](path_to_screenshot.png)
+![Tank Simulation](https://drive.google.com/file/d/1_aWmjnpcmK0xM1zD6r2LsVyvqJWvyIVF/view?usp=sharing)
 
 ## Future Work
 
