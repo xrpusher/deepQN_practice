@@ -34,6 +34,7 @@ To run this simulation, you'll need to install the following Python packages:
 
 ```bash
 pip install numpy imageio opencv-python pettingzoo gymnasium
+```
 
 ## Requirements:
 - **Python 3.8 or higher**
