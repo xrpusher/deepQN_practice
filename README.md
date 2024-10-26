@@ -1,3 +1,3 @@
 # About
 
-Repository with implementation of games on basic MARL algorithms.
+Branch repository with implementation of games on basic marl algorithms
