@@ -1,16 +1,18 @@
 import numpy as np
-import imageio
 import cv2
+import imageio  # Для записи видео
 from pettingzoo import AECEnv
-from pettingzoo.utils import agent_selector
 from gymnasium.spaces import Discrete, Box
 
-# Environment parameters
+# Параметры среды
 GRID_SIZE = 5
-SCALE_FACTOR = 48  # Увеличен масштаб для улучшения качества изображения
-NUM_EPISODES = 200  # Количество эпизодов
-INITIAL_CHARGE = 100  # Начальный уровень заряда для каждого трактора
-FRAME_SKIP = 5  # Сохраняем каждый 5-й кадр
+SCALE_FACTOR = 48
+NUM_EPISODES = 300
+INITIAL_CHARGE = 100
+FRAME_SKIP = 5
+LEARNING_RATE = 0.1
+DISCOUNT_FACTOR = 0.99
+EPSILON = 0.3  # Вероятность исследования
 
 class PotatoFieldEnv(AECEnv):
     metadata = {"render_modes": ["rgb_array"], "is_parallelizable": True}
@@ -25,7 +27,7 @@ class PotatoFieldEnv(AECEnv):
         self.charges = {agent: INITIAL_CHARGE for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.central_buffer = {}
-        self.max_rewards = {agent: float('-inf') for agent in self.possible_agents}  # Track max rewards
+        self.q_tables = {agent: np.zeros((GRID_SIZE, GRID_SIZE, 6)) for agent in self.agents}  # Q-таблицы
 
     def observation_space(self, agent):
         return Box(low=0, high=1, shape=(GRID_SIZE, GRID_SIZE), dtype=np.float32)
@@ -48,8 +50,9 @@ class PotatoFieldEnv(AECEnv):
                 self.charges[agent] -= 1
                 self.central_buffer[agent] = self._propose_move(agent, action)
 
-        self._apply_actions_from_buffer()
-        
+        self._apply_actions_from_buffer()  # Применяем действия
+
+        # Проверка завершения эпизода
         if all(charge <= 0 for charge in self.charges.values()) or np.sum(self.grid == 1) == 0:
             for agent in self.agents:
                 self.terminations[agent] = True
@@ -66,13 +69,13 @@ class PotatoFieldEnv(AECEnv):
             new_x -= 1
         elif action == 3 and x < GRID_SIZE - 1:
             new_x += 1
-        elif action == 4:
+        elif action == 4:  # Сбор картошки
             if self.grid[y][x] == 1:
                 self.grid[y][x] = -1 if agent == "tractor_red" else -2
                 self.rewards[agent] += 1
             else:
                 self.rewards[agent] -= 0.5
-        elif action == 5:
+        elif action == 5:  # Ожидание
             self.rewards[agent] -= 0.1
 
         return (new_x, new_y) if action in [0, 1, 2, 3] else self.positions[agent]
@@ -95,9 +98,24 @@ class PotatoFieldEnv(AECEnv):
             obs[pos[1], pos[0]] = -1 if i == 0 else -2
         return obs
 
-    def render(self):
-        display_grid = np.ones((GRID_SIZE * SCALE_FACTOR, GRID_SIZE * SCALE_FACTOR + 50, 3), dtype=np.uint8) * 255
+    def choose_action(self, agent):
+        """Выбирает действие на основе ε-greedy стратегии."""
+        x, y = self.positions[agent]
+        if np.random.rand() < EPSILON:
+            return np.random.randint(0, 6)  # Исследуем случайное действие
+        return np.argmax(self.q_tables[agent][y, x])  # Выбираем лучшее действие
 
+    def centralized_critic_update(self, agent, action, reward, new_position):
+        """Обновляет значение Q для заданного агента на основе централизованного критика."""
+        x, y = self.positions[agent]
+        new_x, new_y = new_position
+        best_future_q = np.max(self.q_tables[agent][new_y, new_x])
+        # Q-learning обновление
+        self.q_tables[agent][y, x, action] = (1 - LEARNING_RATE) * self.q_tables[agent][y, x, action] + \
+                                             LEARNING_RATE * (reward + DISCOUNT_FACTOR * best_future_q)
+
+    def render(self):
+        display_grid = np.ones((GRID_SIZE * SCALE_FACTOR, GRID_SIZE * SCALE_FACTOR, 3), dtype=np.uint8) * 255
         for y in range(GRID_SIZE):
             for x in range(GRID_SIZE):
                 if self.grid[y][x] == 1:
@@ -116,11 +134,6 @@ class PotatoFieldEnv(AECEnv):
                           ((pos[0] + 1) * SCALE_FACTOR, (pos[1] + 1) * SCALE_FACTOR),
                           color, -1)
 
-        for i, agent in enumerate(self.possible_agents):
-            reward_text = f"{agent}: {self.rewards[agent]:.1f} | Charge: {self.charges[agent]}"
-            cv2.putText(display_grid, reward_text, (10, 15 + i * 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 0, 0), 1, cv2.LINE_AA)
-
         return display_grid
 
     def _draw_cross(self, grid, x, y, color):
@@ -130,40 +143,44 @@ class PotatoFieldEnv(AECEnv):
                  color, 2)
         cv2.line(grid,
                  (x * SCALE_FACTOR + SCALE_FACTOR // 4, y * SCALE_FACTOR + 3 * SCALE_FACTOR // 4),
-                 (x * SCALE_FACTOR + 3 * SCALE_FACTOR // 4, y * SCALE_FACTOR + SCALE_FACTOR // 4),
+                 (x * SCALE_FACTOR + 3 * SCALE_FACTOR // 4, y * SCALE_FACTOR // 4),
                  color, 2)
 
     def close(self):
         pass
 
-# Run the simulation and track max rewards
+# Основной цикл обучения и запись видео
 env = PotatoFieldEnv(render_mode="rgb_array")
 frames = []
 
 for episode in range(NUM_EPISODES):
     env.reset()
     for step in range(INITIAL_CHARGE):
-        actions = {agent: env.action_space(agent).sample() for agent in env.agents}
+        actions = {agent: env.choose_action(agent) for agent in env.agents}
         env.step(actions)
-        
+
+        # Обновляем Q-таблицы с помощью централизованного критика
+        for agent, action in actions.items():
+            reward = env.rewards[agent]
+            new_position = env.central_buffer[agent]
+            env.centralized_critic_update(agent, action, reward, new_position)
+
         if step % FRAME_SKIP == 0:
-            frames.append(env.render())
-        
+            frames.append(env.render())  # Сохраняем кадры
+
         if all(env.terminations.values()):
             break
 
-    # Update max rewards after each episode
-    for agent in env.possible_agents:
-        env.max_rewards[agent] = max(env.max_rewards[agent], env.rewards[agent])
 
-# Save video
-with imageio.get_writer("potato_field_simulation_optimized.mp4", fps=10) as writer:
+
+# Вывод максимальных наград для каждого агента
+print("Max rewards for each agent:")
+for agent, reward in env.rewards.items():
+    print(f"{agent}: {reward:.1f}")
+
+# Запись видео из сохранённых кадров
+with imageio.get_writer("potato_field_simulation_maddpg.mp4", fps=10) as writer:
     for frame in frames:
         writer.append_data(frame)
 
-# Print max rewards for each agent across episodes
-print("Max rewards across all episodes:")
-for agent, reward in env.max_rewards.items():
-    print(f"{agent}: {reward:.1f}")
-
-print("Video saved as potato_field_simulation_optimized.mp4")
+print("Видео сохранено как potato_field_simulation_maddpg.mp4")
