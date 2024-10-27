@@ -14,11 +14,11 @@ from gymnasium.spaces import Discrete, Box
 
 
 # Параметры среды и обучения
-GRID_SIZE = 6
+GRID_SIZE = 5
 SCALE_FACTOR = 32
 INITIAL_CHARGE = 100
-NUM_EPISODES = 1000
-SAVE_PATH = "training_state_vdn.pkl"
+NUM_EPISODES = 500
+SAVE_PATH = "training_state_vdn251113.pkl"
 VIDEO_PATH = "garbage_collection_training_vdn.mp4"
 MEMORY_SIZE = 10000
 BATCH_SIZE = 32
@@ -166,24 +166,34 @@ class GarbageCollectionEnv(AECEnv):
         return display_grid
 
 
+   
     def update_elo(self):
         """Обновление ELO рейтинга на основе командных результатов."""
         sber_reward = sum(self.rewards[agent] for agent in self.teams["sber"])
         yandex_reward = sum(self.rewards[agent] for agent in self.teams["yandex"])
 
-
         ea = 1 / (1 + 10 ** ((self.elo_scores["yandex"] - self.elo_scores["sber"]) / 400))
         eb = 1 - ea
         k = 32  # Коэффициент K для рейтинга ELO
+
         if sber_reward > yandex_reward:
-            sa = 1
-            sb = 0
+            sa, sb = 1, 0
         elif sber_reward < yandex_reward:
-            sa = 0
-            sb = 1
+            sa, sb = 0, 1
         else:
-            sa = 0.5
-            sb = 0.5
+            sa, sb = 0.5, 0.5  # Если награды равны
+
+        old_sber_elo = self.elo_scores["sber"]
+        old_yandex_elo = self.elo_scores["yandex"]
+
+        # Обновляем ELO
+        self.elo_scores["sber"] += k * (sa - ea)
+        self.elo_scores["yandex"] += k * (sb - eb)
+
+        # Вывод обновленных значений ELO для каждой команды
+        print(f"Обновление ELO: Sber ({old_sber_elo} -> {self.elo_scores['sber']}), "
+            f"Yandex ({old_yandex_elo} -> {self.elo_scores['yandex']})")
+
 
 
         self.elo_scores["sber"] += k * (sa - ea)
@@ -325,16 +335,18 @@ class VDNAgent:
         self.replay_buffer = ReplayBuffer(MEMORY_SIZE)
 
 
-    def select_actions(self, observations):
+    def select_actions(self, observations, epsilon=0.1):
         actions = {}
-        action_probs = {}
         for agent in self.env.agents:
-            state = observations[agent].flatten().reshape(-1, 1)  # (state_dim x 1)
-            q_values = self.q_networks[agent].forward(state)  # (action_dim x 1)
-            action = np.argmax(q_values, axis=0)[0]
+            if np.random.rand() < epsilon:
+                action = np.random.randint(0, self.action_dim)
+            else:
+                state = observations[agent].flatten().reshape(-1, 1)
+                q_values = self.q_networks[agent].forward(state)
+                action = np.argmax(q_values, axis=0)[0]
             actions[agent] = action
-            action_probs[agent] = q_values.flatten()
-        return actions, action_probs
+        return actions
+
 
 
     def store_transition(self, observations, actions, rewards, next_observations, dones):
@@ -399,64 +411,71 @@ class VDNAgent:
         print(f"Средняя потеря за обновление: {total_loss / self.n_agents:.4f}")
 
 
-# Основной цикл обучения
+
+# Убедитесь, что только одна функция main() определена
+
 def main():
     env = GarbageCollectionEnv()
     last_episode = env.load_training_state()
     print(f"Продолжение обучения с эпизода {last_episode + 1}")
 
-
     agent = VDNAgent(env)
-
 
     frames = []
     rewards_over_time = []
     elo_over_time = {"sber": [], "yandex": []}
 
+    # Переменные для отслеживания максимальных значений ELO и Reward
+    max_elo_sber = env.elo_scores["sber"]
+    max_elo_yandex = env.elo_scores["yandex"]
+    max_reward_sber = 0
+    max_reward_yandex = 0
 
     for episode in range(last_episode + 1, NUM_EPISODES + 1):
         observations = env.reset()
         episode_reward = 0
         done = {agent_id: False for agent_id in env.agents}
 
-
         for step in range(INITIAL_CHARGE):
-            actions, action_probs = agent.select_actions(observations)
+            actions = agent.select_actions(observations)
             env.step(actions)
             next_observations = {agent_id: env.observe(agent_id) for agent_id in env.agents}
             rewards = {agent_id: env.rewards[agent_id] for agent_id in env.agents}
             dones = {agent_id: env.terminations[agent_id] for agent_id in env.agents}
 
-
             agent.store_transition(observations, actions, rewards, next_observations, dones)
             agent.update()
 
+            # Обновляем ELO после каждого шага
+            env.update_elo()
 
             observations = next_observations
             episode_reward += sum(rewards.values())
 
-
-            # Сохранение кадров для видео
-            if step % 5 == 0:
-                frame = env.render()
-                if frame is not None:
-                    frames.append(frame)
-
-
             if all(dones.values()):
                 break
 
+        # Добавляем расчет командных наград за эпизод для вывода
+        reward_sber = sum(env.rewards[agent] for agent in env.teams["sber"])
+        reward_yandex = sum(env.rewards[agent] for agent in env.teams["yandex"])
+
+        print(f"Эпизод {episode}: Награда Sber={reward_sber}, Yandex={reward_yandex}")
+        print(f"ELO Sber={env.elo_scores['sber']:.2f}, ELO Yandex={env.elo_scores['yandex']:.2f}\n")
+
+        # Обновляем максимальные значения ELO и Reward
+        max_elo_sber = max(max_elo_sber, env.elo_scores["sber"])
+        max_elo_yandex = max(max_elo_yandex, env.elo_scores["yandex"])
+        max_reward_sber = max(max_reward_sber, reward_sber)
+        max_reward_yandex = max(max_reward_yandex, reward_yandex)
 
         rewards_over_time.append(episode_reward)
         elo_over_time["sber"].append(env.elo_scores["sber"])
         elo_over_time["yandex"].append(env.elo_scores["yandex"])
 
-
         # Сохранение состояния каждые 100 эпизодов
         if episode % 100 == 0:
             env.save_training_state(episode)
             print(f"Сохранено состояние на эпизоде {episode}")
-
 
         # Вывод прогресса каждые 10 эпизодов
         if episode % 10 == 0:
@@ -466,6 +485,12 @@ def main():
             print(f"Эпизод {episode}/{NUM_EPISODES}, Средняя награда: {mean_reward:.2f}, "
                   f"ELO Sber: {mean_elo_sber:.1f}, ELO Yandex: {mean_elo_yandex:.1f}")
 
+    # Вывод максимальных значений ELO и Reward за все эпизоды
+    print("\nМаксимальные значения за все эпизоды:")
+    print(f"Максимальный ELO Sber: {max_elo_sber}")
+    print(f"Максимальный ELO Yandex: {max_elo_yandex}")
+    print(f"Максимальный Reward Sber: {max_reward_sber}")
+    print(f"Максимальный Reward Yandex: {max_reward_yandex}")
 
     # Сохранение видео
     try:
@@ -477,28 +502,7 @@ def main():
         print(f"Не удалось сохранить видео: {e}")
 
 
-    # Визуализация результатов
-    plt.figure(figsize=(12, 6))
-    plt.subplot(1, 2, 1)
-    plt.plot(rewards_over_time, label="Total Rewards per Episode")
-    plt.xlabel("Episode")
-    plt.ylabel("Total Reward")
-    plt.title("Rewards Over Time")
-    plt.legend()
 
-
-    plt.subplot(1, 2, 2)
-    plt.plot(elo_over_time["sber"], label="ELO Sber")
-    plt.plot(elo_over_time["yandex"], label="ELO Yandex")
-    plt.xlabel("Episode")
-    plt.ylabel("ELO Score")
-    plt.title("ELO Scores Over Time")
-    plt.legend()
-
-
-    plt.tight_layout()
-    plt.show()
-
-
+# Запуск программы
 if __name__ == "__main__":
     main()
