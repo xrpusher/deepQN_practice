@@ -1,38 +1,92 @@
-# Atari Riverraid Deep Q-Learning Agent
+# **Riverraid Reinforcement Learning**
 
-This project implements a Deep Q-Learning (DQN) algorithm to train an agent to play **Riverraid** on the Atari platform, using Gymnasium and PyTorch.
+This repository contains implementations of Deep Q-Network (DQN) and
+Proximal Policy Optimization (PPO) to train and test agents on the
+\"Riverraid\" game from the Atari Learning Environment using gymnasium.
+The repository supports training models, saving weights, and recording
+gameplay videos.
 
-## Overview
+## **Project Structure**
 
-The project demonstrates how to use Deep Q-Learning to train an agent to play the Atari game **Riverraid**. The agent uses a convolutional neural network (CNN) to approximate Q-values (action-value predictions) and makes decisions based on the RGB frames of the game.
+- DQN_homework_train_save_weight.py: Trains a DQN agent and saves the
+  > trained weights.
 
-### Gameplay Demonstration
+- DQN_load_train_test.py: Loads saved DQN weights, tests the agent, and
+  > records gameplay as a video.
 
-You can watch a video demonstrating the trained agent's gameplay at the following link:
-[Gameplay Video](https://github.com/xrpusher/deepQN_practice/blob/practice_2/riverraid_play.mp4)
+- PPO_homework_train_save_weight.py: Trains a PPO agent, saves weights,
+  > and uses callbacks for training checkpoints.
 
-### Riverraid Environment
+- PPO_load_train_test.py: Loads a saved PPO model, tests the agent, and
+  > records gameplay as a video.
 
-Riverraid is a classic Atari arcade game where the player controls a plane flying over a river. The goal is to destroy enemy objects, avoid collisions, and replenish fuel by flying over fuel depots. The game provides rewards for destroying objects like tankers, helicopters, jets, and bridges.
+- dqn_riverraid_final.pth: Pre-trained weights for the DQN agent.
 
-You can read more about the Riverraid environment and its variations on the official Gymnasium documentation: [Riverraid Environment Documentation](https://gymnasium.farama.org/environments/atari/riverraid/)
+- riverraid_ppo_play.mp4: Recorded gameplay video of the PPO agent.
 
-###  Result of new version
-https://drive.google.com/file/d/1ms7P5ri3L2ZgAh94xhr6xT_A4bSO8kmK/view?usp=sharing
+- requirements.txt: Python dependencies required for the project.
 
-        self.epsilon = 1.0  # Initial exploration
-        self.epsilon_min = 0.1
-        self.epsilon_decay = 0.995
-        self.gamma = 0.99  # Discount factor
-        self.learning_rate = 0.00025
-        self.batch_size = 32
-        self.memory_capacity = 20000
-        self.target_update = 1000
-###  Statistics for version 1     
+- README.md: Overview of the project.
 
-1) RTX 2060 super
-2) 1.5h
-3) Max reward in video - 680, in episode - 970
+## **Getting Started**
 
-### License
-This project is released under the MIT License.
+### **Installation**
+
+Clone this repository:  
+bash  
+Copy code  
+git clone \<repository-url\>
+
+cd \<repository-directory\>
+
+
+Install dependencies:  
+bash  
+Copy code  
+pip install -r requirements.txt
+
+
+### **Usage**
+
+**Training DQN:  
+**bash  
+Copy code  
+python DQN_homework_train_save_weight.py
+
+
+**Testing DQN and Recording Video:** Ensure dqn_riverraid_final.pth is
+in the project directory:  
+bash  
+Copy code  
+python DQN_load_train_test.py
+
+
+**Training PPO:  
+**bash  
+Copy code  
+python PPO_homework_train_save_weight.py
+
+
+**Testing PPO and Recording Video:** Ensure ppo_riverraid_final.zip is
+in the project directory:  
+bash  
+Copy code  
+python PPO_load_train_test.py
+
+### **Results**
+
+- The models generate gameplay videos demonstrating their performance:
+
+  - dqn_riverraid_play.mp4
+
+  - riverraid_ppo_play.mp4
+
+## **Requirements**
+
+- Python 3.8 or higher
+
+- CUDA-compatible GPU (optional, for faster training)
+
+### **Dependencies**
+
+See requirements.txt for all dependencies.
