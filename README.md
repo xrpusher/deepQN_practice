@@ -17,7 +17,7 @@ gameplay videos.
 - PPO_homework_train_save_weight.py: Trains a PPO agent, saves weights,
   > and uses callbacks for training checkpoints.
 
-- PPO_load_train_test.py: Loads a saved PPO model, tests the agent, and
+- PPO_load_train_test.py: Loads a saved PPO weight, tests the agent, and
   > records gameplay as a video.
 
 - dqn_riverraid_final.pth: Pre-trained weights for the DQN agent.
